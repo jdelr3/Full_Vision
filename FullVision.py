@@ -44,14 +44,14 @@ class VideoGet:
 ###
 #################################################################################
     def __init__(self,src):
-        self.stream = cv2.VideoCapture(src)
+        self.stream = cv.VideoCapture(src)
         (self.grabbed, self.frame) = self.stream.read()
         self.gray = self.frame
         self.stopped = False
         self.stream
         
     def start(self):
-        Thread(target=self.get, args=()).start()
+        threading.Thread(target=self.get, args=()).start()
         return self
 
     def get(self):
@@ -60,8 +60,6 @@ class VideoGet:
                 self.stop()
             else:
                 (self.grabbed, self.frame) = self.stream.read()
-                #self.gray = cv2.cvtColor(self.frame,
-                #                         cv2.COLOR_BGR2GRAY)
                 
     def stop(self):
         self.stopped = True
@@ -95,6 +93,18 @@ def SET_LED(brightness, color):
 ###############################################################################
    pass
 
+def PIXEL_NORMALIZATION(frame):
+###############################################################################
+###
+###   Normalize video input to correct contrast and make picture easier to
+###      operate on, also resize to 720
+###
+###############################################################################
+   alpha = 0
+   beta = 0
+   frame_720 = np.zeros((1280,720))
+   return cv.normalize(frame,frame_720,alpha,beta,cv.NORM_MINMAX)
+
 def FRAME_MANIP(frame):
 ###############################################################################
 ###
@@ -102,7 +112,9 @@ def FRAME_MANIP(frame):
 ###      This needs to be futher refined before it is written
 ###
 ###############################################################################
-   pass
+   if frame is not None:
+      ## frank put function call here
+      frame = PIXEL_NORMALIZATION(frame)
 
 def SEARCH_FRAME(frame):
 ###############################################################################
@@ -130,6 +142,7 @@ def WRITE_ERROR(errorcode):
 ###
 ###############################################################################
 CameraSource = 0
+errorcode = 0
 
 ###############################################################################
 ###
