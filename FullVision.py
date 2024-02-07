@@ -19,6 +19,7 @@ import os                     ### probably will be used for writting to sd card
 import cv2 as cv              ### opencv libraries
 import numpy as np            ### for image mainpulation "cut out roi"
 import threading              ### will be used to multihread video input
+import datetime               ### used to get the date in YYYY-MM-DD for folder
 
 ################################################################################
 ###
@@ -70,20 +71,42 @@ class VideoGet:
 ###
 ###############################################################################
 
-def SAVE_TO_SD ():
+def GET_SAVE_FILE(base_path):
+###############################################################################
+###
+###   Given a path to the external sd card
+###   Check if a folder already exists for this date, if no create
+###    create a new filename with the current time (this will be on startup)
+###   return the file path   
+###
+###############################################################################
+   if os.path.isdir(base_path):
+      os.chdir(base_path)
+      daySTR = datetime.date.today().isoformat()
+      if os.path.isdir(base_path + daySTR) != True:
+         os.mkdir(base_path + daySTR)
+      return str(base_path + daySTR)   #return as a string
+   else:
+      return -1                        #return -1 no SD Card mounted
+
+def SAVE_TO_SD (file_path, frame, writer):
 ###############################################################################
 ###
 ### Given a source copy that source frame to the sd card that will be setup
 ###   Psuedo Code
-###   Check that the external sd card is mounted
-###      if yes check that a file is already being written
-###         if yes append frame to end of previous file
-###            on sucessful writing return
-###      if no create a new file with the date (note this will drift)
-###   if no sd card is mounted show an alert that there is a problem (LED FLASH)
+###   xCheck that the external sd card is mounted
+###     -if yes check that a file is already being written (taken care of above)
+###         xif yes append frame to end of previous file
+###            xon sucessful writing return
+###      -if no create a new file with the date (note this will drift) (taken care of above)
+###   xif no sd card is mounted show an alert that there is a problem (LED FLASH)
 ###
 ###############################################################################
-   pass
+   if os.path.isdir(file_path):
+      writer.write(frame)
+   else:
+      return -1
+   
 
 def SET_LED(brightness, color):
 ###############################################################################
@@ -143,6 +166,17 @@ def WRITE_ERROR(errorcode):
 ###############################################################################
 CameraSource = 0
 errorcode = 0
+path_to_SD = "/media/externalSD/" ## This is an example will change once the
+                                 #on the hardware and confirm directory
+
+
+###############################################################################
+###
+###   Error table
+###
+###############################################################################
+noSD = -1      # error code 1 no external sd mounted
+msngFrme = -2  # error code 2 missing or corrupted frame
 
 ###############################################################################
 ###
@@ -159,16 +193,27 @@ errorcode = 0
 ###         after y amount of time clear the count
 ###      
 
-if __name__ == "__main__": #this will prbly never be called but jic
+if __name__ == "__main__": #this will probably never be called but jic
    video_getter = VideoGet(CameraSource).start()
    frame = video_getter.frame
    grabbed = video_getter.grabbed
 
-   while grabbed == True:
-      SAVE_TO_SD(frame)
-      mframe = FRAME_MANIP(frame)
-      x1,x2,y1,y2 = SEARCH_FRAME(mframe)
+   ### setup the opencv video writer
+   saveName = GET_SAVE_FILE(path_to_SD)
+   fourcc = cv.VideoWriter_fourcc(*'xh264') # need to install ffmpeg, x264, libx264-dev
+   out = cv.videoWriter(saveName, fourcc, 20.0, (1920,1080))
 
+   while grabbed == True & errorcode == 0:
+      if SAVE_TO_SD(saveName, frame, out) != -1:
+         mframe = FRAME_MANIP(frame)
+         x1,x2,y1,y2 = SEARCH_FRAME(mframe)
+      else:
+         errorcode = noSD
+
+   ### if the while loop is broken check that the frame isn't missing   
+   if grabbed == False:
+      errorcode = msngFrme
+      
 # if for some reason the prgram encounters an error and closses or a grabbed frame is missed
 # alert the user and write an error to a file on the sd card
 ###############################################################################
