@@ -20,6 +20,7 @@ import cv2 as cv              ### opencv libraries
 import numpy as np            ### for image mainpulation "cut out roi"
 import threading              ### will be used to multihread video input
 import datetime               ### used to get the date in YYYY-MM-DD for folder
+import argparse		### implementation of command line flags to control features
 
 ################################################################################
 ###
@@ -161,6 +162,16 @@ def WRITE_ERROR(errorcode):
 
 ###############################################################################
 ###
+###   Argrument parsing
+###
+###############################################################################
+parser = argparse.ArgumentParser(description="Gives the ability to enable and \
+   disable features as necessary during the programming testing phase")
+parser.add_argument('-S',"--ShowVideo", action="store_true")
+args = parser.parse_args()
+
+###############################################################################
+###
 ###   Define variables
 ###
 ###############################################################################
@@ -191,28 +202,40 @@ msngFrme = -2  # error code 2 missing or corrupted frame
 ###      if no classificaiton can be found save coordinates to check in next frame
 ###      if classification has been made add to count if x same classifications set alert
 ###         after y amount of time clear the count
-###      
+###     
+############################################################################### 
 
 if __name__ == "__main__": #this will probably never be called but jic
-   video_getter = VideoGet(CameraSource).start()
-   frame = video_getter.frame
-   grabbed = video_getter.grabbed
+#   video_getter = VideoGet(CameraSource).start()
+#   frame = video_getter.frame
+#   grabbed = video_getter.grabbed
+   srcVideo = cv.VideoCapture(CameraSource)
+   grabbed, frame = srcVideo.read()
 
    ### setup the opencv video writer
-   saveName = GET_SAVE_FILE(path_to_SD)
-   fourcc = cv.VideoWriter_fourcc(*'xh264') # need to install ffmpeg, x264, libx264-dev
-   out = cv.videoWriter(saveName, fourcc, 20.0, (1920,1080))
-
-   while grabbed == True & errorcode == 0:
-      if SAVE_TO_SD(saveName, frame, out) != -1:
-         mframe = FRAME_MANIP(frame)
-         x1,x2,y1,y2 = SEARCH_FRAME(mframe)
-      else:
-         errorcode = noSD
+   saveName = GET_SAVE_FILE(path_to_SD, ".mp4")
+   print(saveName)
+   fourcc = cv.VideoWriter_fourcc(*'mp4v') 
+   #out = cv.VideoWriter(saveName + "test.mp4", fourcc, 30, (1920,1080), 0)
+   
+   while grabbed == True and errorcode == 0:
+#      frame = video_getter.frame
+#      grabbed = video_getter.grabbed
+      grabbed, frame = srcVideo.read()
+      
+      if args.ShowVideo:
+         cv.imshow("TestOut",frame)
+         cv.waitKey(25)
+      #if SAVE_TO_SD(saveName, frame, out) != -1:
+      #   mframe = FRAME_MANIP(frame)
+      #   x1,x2,y1,y2 = SEARCH_FRAME(mframe)
+      #else:
+      #   errorcode = noSD
 
    ### if the while loop is broken check that the frame isn't missing   
    if grabbed == False:
       errorcode = msngFrme
+      print("error missing frame") 
       
 # if for some reason the prgram encounters an error and closses or a grabbed frame is missed
 # alert the user and write an error to a file on the sd card
@@ -222,4 +245,4 @@ if __name__ == "__main__": #this will probably never be called but jic
 ###
 ###############################################################################
 WRITE_ERROR(errorcode)
-video_getter.stop()
+#video_getter.stop()
