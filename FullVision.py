@@ -15,11 +15,11 @@
 ###
 ################################################################################
 
-import os                     ### probably will be used for writting to sd card
-import cv2 as cv              ### opencv libraries
-import numpy as np            ### for image mainpulation "cut out roi"
-import threading              ### will be used to multihread video input
-import datetime               ### used to get the date in YYYY-MM-DD for folder
+import os            ### probably will be used for writting to sd card
+import cv2 as cv     ### opencv libraries
+import numpy as np   ### for image mainpulation "cut out roi"
+import threading     ### will be used to multihread video input
+import datetime      ### used to get the date in YYYY-MM-DD for folder
 import argparse		### implementation of command line flags to control features
 
 ################################################################################
@@ -167,7 +167,12 @@ def WRITE_ERROR(errorcode):
 ###############################################################################
 parser = argparse.ArgumentParser(description="Gives the ability to enable and \
    disable features as necessary during the programming testing phase")
-parser.add_argument('-S',"--ShowVideo", action="store_true")
+parser.add_argument('-S',"--ShowVideo", action="store_true", 
+                    help="Show video on desktop")
+parser.add_argument('-M', "--Demo", action="store_true", 
+                    help="Use a video from  the desktop")
+parser.add_argument('-D', "--Debug", action="store_true")
+
 args = parser.parse_args()
 
 ###############################################################################
@@ -175,7 +180,11 @@ args = parser.parse_args()
 ###   Define variables
 ###
 ###############################################################################
-CameraSource = 0
+if args.Demo:
+   CameraSource = '/home/fullvison/Full_Vision/Fullerton_720.mp4'
+else:
+   CameraSource = 0
+   
 errorcode = 0
 path_to_SD = "/media/externalSD/" ## This is an example will change once the
                                  #on the hardware and confirm directory
