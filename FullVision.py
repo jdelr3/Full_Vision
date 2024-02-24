@@ -184,7 +184,7 @@ if args.Demo:
    CameraSource = '/home/fullvison/Full_Vision/Fullerton_720.mp4'
 else:
    CameraSource = 0
-   
+
 errorcode = 0
 path_to_SD = "/media/externalSD/" ## This is an example will change once the
                                  #on the hardware and confirm directory
@@ -222,7 +222,7 @@ if __name__ == "__main__": #this will probably never be called but jic
    grabbed, frame = srcVideo.read()
 
    ### setup the opencv video writer
-   saveName = GET_SAVE_FILE(path_to_SD, ".mp4")
+   saveName = GET_SAVE_FILE(path_to_SD)
    print(saveName)
    fourcc = cv.VideoWriter_fourcc(*'mp4v') 
    #out = cv.VideoWriter(saveName + "test.mp4", fourcc, 30, (1920,1080), 0)
@@ -234,7 +234,7 @@ if __name__ == "__main__": #this will probably never be called but jic
       
       if args.ShowVideo:
          cv.imshow("TestOut",frame)
-         cv.waitKey(25)
+         cv.waitKey(1)
       #if SAVE_TO_SD(saveName, frame, out) != -1:
       #   mframe = FRAME_MANIP(frame)
       #   x1,x2,y1,y2 = SEARCH_FRAME(mframe)
