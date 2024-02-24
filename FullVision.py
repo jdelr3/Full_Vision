@@ -181,7 +181,7 @@ args = parser.parse_args()
 ###
 ###############################################################################
 if args.Demo:
-   CameraSource = '/home/fullvison/Full_Vision/Fullerton_720.mp4'
+   CameraSource = '/home/fullvison/Full_Vision/FullertonAve.mp4'
 else:
    CameraSource = 0
 
