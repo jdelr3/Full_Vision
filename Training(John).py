@@ -9,16 +9,24 @@ import xml.etree.ElementTree as ET
 from PIL import Image
 import matplotlib.pyplot as plt
 
+user = "John"
+
 '''
 Given a directory with an xml files corresponding to images in the signs folder
  open the xml as an image crop the sign based on the bounding box
  save that image in a new folder labeled cropped
 '''
 
-xml_path = r"C:\Users\johnn\Desktop\Signs\Signs_labeled"
-img_path = r"C:\Users\johnn\Desktop\Signs\Signs"
-cropped_path = r"C:\Users\johnn\Desktop\Signs\Signs_cropped"
-training_path = r"C:\Users\johnn\Desktop\Signs\Training_cropped"
+if user =="John":
+  xml_path = r"C:\Users\johnn\Desktop\Signs\Signs_labeled"
+  img_path = r"C:\Users\johnn\Desktop\Signs\Signs"
+  cropped_path = r"C:\Users\johnn\Desktop\Signs\Signs_cropped"
+  training_path = r"C:\Users\johnn\Desktop\Signs\Training_cropped"
+if user == "Frank":
+  xml_path = r'''Put the path to the xml files here'''
+  img_path = r'''Put the path to the images folder here'''
+  cropped_path = r'''Put the path to the cropped folder here'''
+  training_path = r'''Put the path to the training folder here'''
 
 for xml in os.listdir(xml_path):
   if not xml.endswith('.xml'): continue
@@ -30,20 +38,21 @@ for xml in os.listdir(xml_path):
   top = float(root.find(".//ymin").text)
   right = float(root.find(".//xmax").text)
   bottom = float(root.find(".//ymax").text)
-  #print(path)
 
-  #if not FileNotFoundError:
+
   img = Image.open(path)
   #Crop
   img_res = img.crop((left, top, right, bottom))
   #Convert
   img_res = img_res.convert("RGB")
+  #Normalize
+    #make grayscale
+    #normalize pixel values [0,1]
+  img_res = img_res.convert("L")
+  img_res = img_res / 255
   #Save as a jpeg even if the file name doesn't say so
   img_res.save(os.path.join(cropped_path, os.path.basename(path)), "JPEG")
-    #print("Image saved..")
-  #else:
-    #print("File ", os.path.basename(path), " does not exist")
-
+  
 '''
    Begin Franks code for trainning
 '''
@@ -114,7 +123,7 @@ val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
 # Train a model
 
-num_classes = 5
+num_classes = 3
 
 model = tf.keras.Sequential([
   tf.keras.layers.Rescaling(1./255),
@@ -137,7 +146,7 @@ model.compile(
 model.fit(
   train_ds,
   validation_data=val_ds,
-  epochs=3
+  epochs=10
 )
 
 
