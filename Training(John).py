@@ -2,7 +2,7 @@ import numpy as np
 import os
 import PIL
 import tensorflow as tf
-import tensorflow_datasets as tfds
+
 import pathlib
 import xml.etree.ElementTree as ET
 
@@ -10,6 +10,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 user = "John"
+normalize = False
 
 '''
 Given a directory with an xml files corresponding to images in the signs folder
@@ -22,6 +23,7 @@ if user =="John":
   img_path = r"C:\Users\johnn\Desktop\Signs\Signs"
   cropped_path = r"C:\Users\johnn\Desktop\Signs\Signs_cropped"
   training_path = r"C:\Users\johnn\Desktop\Signs\Training_cropped"
+
 if user == "Frank":
   xml_path = r'''Put the path to the xml files here'''
   img_path = r'''Put the path to the images folder here'''
@@ -38,21 +40,25 @@ for xml in os.listdir(xml_path):
   top = float(root.find(".//ymin").text)
   right = float(root.find(".//xmax").text)
   bottom = float(root.find(".//ymax").text)
+  print("XML path is ", path)
 
-
+  if normalize == True:
+    img = Image.open(path)
+    #Normalize
+    img = tf.image.per_image_standardization(img)
+    #Save as a jpeg even if the file name doesn't say so
+    #img_res.save(os.path.join(cropped_path, os.path.basename(path)), "JPEG")
+    imgPath = os.path.join(cropped_path, os.path.basename(path))
+    imgByte = tf.image.encode_jpeg(tf.cast(img, tf.uint8))
+    tf.io.write_file(imgPath, imgByte)
+  
   img = Image.open(path)
   #Crop
   img_res = img.crop((left, top, right, bottom))
   #Convert
   img_res = img_res.convert("RGB")
-  #Normalize
-    #make grayscale
-    #normalize pixel values [0,1]
-  img_res = img_res.convert("L")
-  img_res = img_res / 255
-  #Save as a jpeg even if the file name doesn't say so
-  img_res.save(os.path.join(cropped_path, os.path.basename(path)), "JPEG")
-  
+  img_res.save(path)
+
 '''
    Begin Franks code for trainning
 '''
@@ -66,7 +72,6 @@ batch_size = 32
 img_height = 180
 img_width = 180
 
-
 train_ds = tf.keras.utils.image_dataset_from_directory(
     data_dir,
     validation_split=0.2,
@@ -78,7 +83,6 @@ train_ds = tf.keras.utils.image_dataset_from_directory(
 val_ds = tf.keras.utils.image_dataset_from_directory(
     data_dir,
     validation_split=0.2,
-
     subset="validation",
     seed=123,
     image_size=(img_height, img_width),
@@ -123,7 +127,7 @@ val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
 # Train a model
 
-num_classes = 3
+num_classes = 4
 
 model = tf.keras.Sequential([
   tf.keras.layers.Rescaling(1./255),
@@ -146,7 +150,7 @@ model.compile(
 model.fit(
   train_ds,
   validation_data=val_ds,
-  epochs=10
+  epochs=5
 )
 
 
@@ -165,6 +169,8 @@ print(class_names)
 val_size = int(image_count * 0.2)
 train_ds = list_ds.skip(val_size)
 val_ds = list_ds.take(val_size)
+
+tf.keras.model.save_weights
 
 print(tf.data.experimental.cardinality(train_ds).numpy())
 print(tf.data.experimental.cardinality(val_ds).numpy())
