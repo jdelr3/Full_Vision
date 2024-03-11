@@ -128,22 +128,29 @@ def preprocess(frame):
 ###############################################################################
    
    rows, cols, null = frame.shape
-   imgHSV = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-   BMIN = np.array([100, 43, 46])
-   BMAX = np.array([124,255,255])
-   img_Bbin = cv.inRange(imgHSV, BMIN, BMAX)
+   #imgHSV = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+   #BMIN = np.array([100, 43, 46])
+   #BMAX = np.array([124,255,255])
+   #BMIN = np.array([50,25,20])
+   #BMAX = np.array([160,255,255])
+   #img_Bbin = cv.inRange(imgHSV, BMIN, BMAX)
+   
+   #Rmin1 = np.array([0, 43, 46])
+   #Rmax1 = np.array([10, 255, 255])
+   #Rmin1 = np.array([0, 60, 60])
+   #Rmax1 = np.array([10, 255, 255])
+   #img_Rbin1 = cv.inRange(imgHSV, Rmin1, Rmax1)
 
-   Rmin1 = np.array([0, 43, 46])
-   Rmax1 = np.array([10, 255, 255])
-   img_Rbin1 = cv.inRange(imgHSV, Rmin1, Rmax1)
+   #Rmin2 = np.array([156, 43, 46])
+   #Rmax2 = np.array([180, 255, 255])
+   #img_Rbin2 = cv.inRange(imgHSV, Rmin2, Rmax2)
+   #img_Rbin = np.maximum(img_Rbin1, img_Rbin2)
+   #img_bin = np.maximum(img_Bbin, img_Rbin)
 
-   Rmin2 = np.array([156, 43, 46])
-   Rmax2 = np.array([180, 255, 255])
-   img_Rbin2 = cv.inRange(imgHSV, Rmin2, Rmax2)
-   img_Rbin = np.maximum(img_Rbin1, img_Rbin2)
-   img_bin = np.maximum(img_Bbin, img_Rbin)
-
-   return img_bin
+   imgGray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)  
+   thresh = cv.adaptiveThreshold(imgGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2)
+   return thresh
+   #return img_bin
 
 def contour_detect(img_bin, min_area, max_area=-1, wh_ratio=2.0):
     rects = []
@@ -181,6 +188,8 @@ def getClassName(classNo):
         return 'Bicycles crossing'
     elif classNo == 30:
         return 'Wild animals crossing'
+    else:
+        return ""
 
 def PIXEL_NORMALIZATION(frame):
 ###############################################################################
@@ -247,12 +256,13 @@ args = parser.parse_args()
 ###############################################################################
 
 #model threshold
-threshold = 0.90
+threshold = 0.80
 font = cv.FONT_HERSHEY_COMPLEX
 
 #Video variables
 if args.Demo:
    CameraSource = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\FullertonAve.mp4"
+   #CameraSource = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\Driving License Germany.mp4"
 else:
    CameraSource = 0
 
@@ -311,12 +321,12 @@ if __name__ == "__main__": #this will probably never be called but jic
 #      frame = video_getter.frame
 #      grabbed = video_getter.grabbed
         grabbed, frame = srcVideo.read()
-
+        
         #preprocess the video
         img_bin = preprocess(frame)
         min_area = img_bin.shape[0] * frame.shape[1] / (25 * 25)
         cv.imshow("processed image", img_bin)
-
+        
         #get contours
         rects = contour_detect(img_bin, min_area)
 
@@ -331,7 +341,7 @@ if __name__ == "__main__": #this will probably never be called but jic
             y2 = min(rows, int(yc + size / 2))
 
             if rect[2] > 100 and rect[3] > 100:
-                cv.rectangle(frame, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (0, 0, 255), 2)
+                cv.rectangle(frame, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (0, 255, 0), 1)
             crop_img = np.asarray(frame[y1:y2, x1:x2])
             crop_img = cv.resize(crop_img, (32, 32))
             crop_img = preprocess(crop_img)
@@ -348,6 +358,7 @@ if __name__ == "__main__": #this will probably never be called but jic
         if args.ShowVideo:
             cv.imshow("Output", frame)  # Display the output
             cv.waitKey(25)
+            
         #if SAVE_TO_SD(saveName, frame, out) != -1:
         #   mframe = FRAME_MANIP(frame)
         #   x1,x2,y1,y2 = SEARCH_FRAME(mframe)
