@@ -127,7 +127,7 @@ def preprocess(frame):
 ###
 ###############################################################################
    
-   rows, cols, null = frame.shape
+   #rows, cols, null = frame.shape
    #imgHSV = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
    #BMIN = np.array([100, 43, 46])
    #BMAX = np.array([124,255,255])
@@ -148,7 +148,7 @@ def preprocess(frame):
    #img_bin = np.maximum(img_Bbin, img_Rbin)
 
    imgGray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)  
-   thresh = cv.adaptiveThreshold(imgGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2)
+   thresh = cv.adaptiveThreshold(imgGray, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, 11, 2)
    return thresh
    #return img_bin
 
@@ -262,7 +262,7 @@ font = cv.FONT_HERSHEY_COMPLEX
 #Video variables
 if args.Demo:
    CameraSource = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\FullertonAve.mp4"
-   #CameraSource = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\Driving License Germany.mp4"
+   #CameraSource = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\Frankfurt.mp4"
 else:
    CameraSource = 0
 
@@ -301,7 +301,7 @@ if __name__ == "__main__": #this will probably never be called but jic
     This group trained this model on the German Traffic Sign Recognition dataset. for the final project we
     will have developed our own model but for the demonstration this will do
     '''
-    model = keras.models.load_model(r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\Fullvision Source Code\Full_Vision\Demo\traffif_sign_model.h5")
+    model = keras.models.load_model(r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\model.keras")
 
     # grab the first frame and then just begin the detection
     srcVideo = cv.VideoCapture(CameraSource)
@@ -323,8 +323,9 @@ if __name__ == "__main__": #this will probably never be called but jic
         grabbed, frame = srcVideo.read()
         
         #preprocess the video
+        #img_bin = frame.resize((320,320))
         img_bin = preprocess(frame)
-        min_area = img_bin.shape[0] * frame.shape[1] / (25 * 25)
+        min_area = frame.shape[0] * frame.shape[1] / (25 * 25)
         cv.imshow("processed image", img_bin)
         
         #get contours
@@ -350,9 +351,10 @@ if __name__ == "__main__": #this will probably never be called but jic
             classIndex = np.argmax(predictions, axis=-1)
             probabilityValue = np.amax(predictions)
             if probabilityValue > threshold:
-                cv.putText(frame, str(classIndex) + " " + str(getClassName(classIndex)), (rect[0], rect[1] - 10),
+                if getClassName(classIndex) != "":
+                    cv.putText(frame, str(classIndex) + " " + str(getClassName(classIndex)), (rect[0], rect[1] - 10),
                             font, 0.75, (0, 0, 255), 2, cv.LINE_AA)
-                cv.putText(frame, str(round(probabilityValue * 100, 2)) + "%", (rect[0], rect[1] - 40), font, 0.75,
+                    cv.putText(frame, str(round(probabilityValue * 100, 2)) + "%", (rect[0], rect[1] - 40), font, 0.75,
                             (0, 0, 255), 2, cv.LINE_AA)
         
         if args.ShowVideo:
