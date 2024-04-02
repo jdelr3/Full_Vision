@@ -30,7 +30,7 @@ if user == "Frank":
   training_path = r'''Put the path to the training folder here'''
 
 if user == "Convert":
-  xml_path = r"C:\Users\johnn\Desktop\Signs\Sorted\Train"
+  xml_path = r"C:\Users\johnn\Desktop\Signs\SortedII"
 
 
 

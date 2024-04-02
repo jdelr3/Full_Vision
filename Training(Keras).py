@@ -2,18 +2,15 @@ import os
 import xml.etree.ElementTree as ET
 import tensorflow as tf
 import keras_cv
-import requests
-import zipfile
- 
+
 from tqdm.auto import tqdm
 from tensorflow import keras
-from keras_cv import bounding_box
 from keras_cv import visualization
 
 SPLIT_RATIO = 0.2
 BATCH_SIZE = 4
-LEARNING_RATE = 0.1
-EPOCH = 20
+LEARNING_RATE = 0.001
+EPOCH = 75
 GLOBAL_CLIPNORM = 10.0
 
 class_ids = [
@@ -22,12 +19,19 @@ class_ids = [
     "Ped",
 ]
 class_mapping = dict(zip(range(len(class_ids)), class_ids))
- 
-# Path to images and annotations
-path_images = r"C:\Users\johnn\Desktop\Signs\SortedII"
-path_annot = r"C:\Users\johnn\Desktop\Signs\SortedII"
-model_path = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\modelII.keras"
- 
+
+GPU = True
+
+if GPU:
+    # Path to images and annotations
+    path_images = "/mnt/c/Users/johnn/Desktop/Signs/SortedII"
+    path_annot = "/mnt/c/Users/johnn/Desktop/Signs/SortedII"
+    model_path = "/mnt/c/Users/johnn/Documents/Semester 14 2024 Spring/ECE 397/modelGPU100.keras"
+else:
+    path_images = r"C:\Users\johnn\Desktop\Signs\SortedII"
+    path_annot = r"C:\Users\johnn\Desktop\Signs\SortedII"
+    model_path = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\model100.keras"
+
 # Get all XML file paths in path_annot and sort them
 xml_files = sorted(
     [
@@ -38,14 +42,21 @@ xml_files = sorted(
 )
  
 # Get all JPEG image file paths in path_images and sort them
-jpg_files = sorted(
-    [
-        os.path.join(path_images, file_name)
-        for file_name in os.listdir(path_images)
-        if file_name.endswith(".jpg")
-    ]
-)
+jpg_files = []
+for file_name in os.listdir(path_images):
+        if file_name.endswith(".jpg"):
+            jpg_files.append(os.path.join(path_images, file_name))
+        elif file_name.endswith(".png"):
+            jpg_files.append(os.path.join(path_images, file_name))
+        elif file_name.endswith(".jpeg"):
+            jpg_files.append(os.path.join(path_images, file_name))
+jpg_files.sort()
 
+#print(xml_files)
+#print(jpg_files)
+#print(len(xml_files), " ", len(jpg_files))
+print(len(xml_files))
+print(len(jpg_files))
 
 def parse_annotation(xml_file):
     tree = ET.parse(xml_file)
@@ -77,11 +88,14 @@ def parse_annotation(xml_file):
 image_paths = []
 bbox = []
 classes = []
+
 for xml_file in tqdm(xml_files):
     image_path, boxes, class_ids = parse_annotation(xml_file)
     image_paths.append(image_path)
     bbox.append(boxes)
     classes.append(class_ids)
+
+#print(image_paths)
 
 bbox = tf.ragged.constant(bbox)
 classes = tf.ragged.constant(classes)
@@ -95,6 +109,8 @@ num_val = int(len(xml_files) * SPLIT_RATIO)
 # Split the dataset into train and validation sets
 val_data = data.take(num_val)
 train_data = data.skip(num_val)
+
+#print(train_data)
 
 def load_image(image_path):
     image = tf.io.read_file(image_path)
@@ -110,24 +126,31 @@ def load_dataset(image_path, classes, bbox):
     }
     return {"images": tf.cast(image, tf.float32), "bounding_boxes": bounding_boxes}
  
-augmenter = keras.Sequential(
-    layers=[
-        keras_cv.layers.RandomFlip(mode="horizontal", bounding_box_format="xyxy"),
-        keras_cv.layers.JitteredResize(
-            target_size=(640, 640),
-            scale_factor=(1.0, 1.0),
-            bounding_box_format="xyxy",
-        ),
-    ]
+#augmenter = keras.Sequential(
+#    layers=[
+#        keras_cv.layers.RandomFlip(mode="horizontal", bounding_box_format="xyxy"),
+#        keras_cv.layers.JitteredResize(
+#            target_size=(320, 320),
+#            scale_factor=(1.0, 1.0),
+#            bounding_box_format="xyxy",
+#        ),
+#    ]
+#)
+
+resizing_train = keras_cv.layers.JitteredResize(
+    target_size=(320, 320),
+    scale_factor=(1.0, 1.0),
+    bounding_box_format="xyxy",
 )
- 
+
 train_ds = train_data.map(load_dataset, num_parallel_calls=tf.data.AUTOTUNE)
 train_ds = train_ds.shuffle(BATCH_SIZE * 4)
 train_ds = train_ds.ragged_batch(BATCH_SIZE, drop_remainder=True)
-train_ds = train_ds.map(augmenter, num_parallel_calls=tf.data.AUTOTUNE)
+#train_ds = train_ds.map(augmenter, num_parallel_calls=tf.data.AUTOTUNE)
+train_ds = train_ds.map(resizing_train, num_parallel_calls=tf.data.AUTOTUNE)
 
-resizing = keras_cv.layers.JitteredResize(
-    target_size=(640, 640),
+resizing_test = keras_cv.layers.JitteredResize(
+    target_size=(320, 320),
     scale_factor=(1.0, 1.0),
     bounding_box_format="xyxy",
 )
@@ -135,8 +158,10 @@ resizing = keras_cv.layers.JitteredResize(
 val_ds = val_data.map(load_dataset, num_parallel_calls=tf.data.AUTOTUNE)
 val_ds = val_ds.shuffle(BATCH_SIZE * 4)
 val_ds = val_ds.ragged_batch(BATCH_SIZE, drop_remainder=True)
-val_ds = val_ds.map(resizing, num_parallel_calls=tf.data.AUTOTUNE)
+#val_ds = val_ds.map(resizing, num_parallel_calls=tf.data.AUTOTUNE)
+val_ds = val_ds.map(resizing_test, num_parallel_calls=tf.data.AUTOTUNE)
 
+'''
 def visualize_dataset(inputs, value_range, rows, cols, bounding_box_format):
     inputs = next(iter(inputs.take(1)))
     images, bounding_boxes = inputs["images"], inputs["bounding_boxes"]
@@ -160,6 +185,7 @@ visualize_dataset(
 visualize_dataset(
     val_ds, bounding_box_format="xyxy", value_range=(0, 255), rows=2, cols=2
 )
+'''
 
 def dict_to_tuple(inputs):
     return inputs["images"], inputs["bounding_boxes"]
@@ -179,7 +205,7 @@ yolo = keras_cv.models.YOLOV8Detector(
     num_classes=len(class_mapping),
     bounding_box_format="xyxy",
     backbone=backbone,
-    fpn_depth=1,
+    fpn_depth=3,
 )
  
 yolo.summary()
@@ -247,13 +273,14 @@ tf.keras.Model.save(yolo, model_path)
 def visualize_detections(model, dataset, bounding_box_format):
     for i in range(10):
         images, y_true = next(iter(dataset.take(i+1)))
+        
         y_pred = model.predict(images)
-        #y_pred = bounding_box.to_ragged(y_pred)
+        #y_pred = keras_cv.bounding_box.to_ragged(y_pred)
         visualization.plot_bounding_box_gallery(
             images,
             value_range=(0, 255),
             bounding_box_format=bounding_box_format,
-            # y_true=y_true,
+            y_true=y_true,
             y_pred=y_pred,
             scale=4,
             rows=2,
