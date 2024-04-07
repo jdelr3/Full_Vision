@@ -36,4 +36,4 @@ for xml in os.listdir(xml_path):
         #image = image/255.0
 
         #image = Image.fromarray(image)
-        image.save(path, "PNG")
+        image.save(path, "JPEG")

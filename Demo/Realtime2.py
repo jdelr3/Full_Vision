@@ -10,9 +10,11 @@ from_vid = False
 model_path = r"c:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\model100.keras"
 model_pb = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\saved_model"
 model_30_pb = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\TestModel\saved_model"
-input_path = r"c:\Users\johnn\Pictures\Screenshots\Screenshot (284).png"
+input_path = r"c:\Users\johnn\Pictures\Screenshots\Screenshot (415).png"
 output_path = r"c:\Users\johnn\Pictures\Screenshots\Screenshot.png"
 video_path = r"c:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\FullertonAve.mp4"
+
+maxwidth, maxheight = 640, 640
 
 if model_use == "keras":
     model = keras.models.load_model(model_path)
@@ -29,7 +31,7 @@ if model_use == "pb_30":
     bbox = str('detection_boxes')
     classes = str('detection_classes')
 
-THRESHOLD = .10
+THRESHOLD = .1
 
 class_ids = [
     "none",
@@ -37,6 +39,8 @@ class_ids = [
     "SCHOOL",
     "PEDESTRIAN",
 ]
+
+class_mapping = dict(zip(range(len(class_ids)), class_ids))
 
 if from_vid == True:
     cap = cv.VideoCapture(video_path)
@@ -50,9 +54,25 @@ if from_vid == True:
         #cv.waitKey(1)
 
         if model_use == "keras":
-            rframe = cv.resize(frame, (320,320))
+            f1 = maxwidth / frame.shape[1]
+            f2 = maxheight / frame.shape[0]
+            f = min(f1, f2)
+            dim = (int(frame.shape[1] * f), int(frame.shape[0] * f))
+            rframe = cv.resize(frame, dim)
+            h, w = rframe.shape[:2]
+            if h < w:
+                top = (maxheight - h) / 2
+                bottom = (maxheight - h) / 2
+                left = 0
+                right = 0
+            else:
+                top = 0
+                bottom = 0
+                left = (maxwidth - w) / 2
+                right = (maxwidth - w) / 2
+            rframe = cv.copyMakeBorder(rframe, int(top), int(bottom), int(left), int(right), cv.BORDER_CONSTANT)
         else:
-            rframe = cv.resize(frame, (320,320))
+            rframe = cv.resize(frame, (maxwidth,maxheight))
         nframe = np.array(rframe)
         nframe = np.expand_dims(nframe, 0)
         nframe = nframe/255.0
@@ -78,10 +98,10 @@ if from_vid == True:
                             print(class_ids[int(classes[signIndex][sIndex])])
                             print(bbox[signIndex][sIndex][0:4])
                             x_min, y_min, x_max, y_max = np.array(bbox[signIndex][sIndex][0:4])
-                            x_min = x_min * 320
-                            y_min = y_min * 320
-                            x_max = x_max * 320
-                            y_max = y_max * 320
+                            x_min = x_min
+                            y_min = y_min
+                            x_max = x_max
+                            y_max = y_max
                             color = (0, 255, 0)  # Green color (BGR format)
                             thickness = 2
                             cv.rectangle(rframe, (int(x_min), int(y_min)), (int(x_max), int(y_max)), color, thickness)
@@ -94,35 +114,95 @@ if from_vid == True:
             for signIndex, sign in enumerate(confidence):
                 #print(sign)
                 #print(classes[signIndex])
-                if sign.any() > THRESHOLD:
+                if sign.any() > THRESHOLD * 100:
                     for sIndex, s in enumerate(sign):
                         #print(sIndex, " ", s)
-                        if s.any() > THRESHOLD:
+                        if s.any() > THRESHOLD * 100:
                             for cIndex, c in enumerate(s):
-                                if c > THRESHOLD:
+                                if c > THRESHOLD * 100:
                                     print(class_ids[int(cIndex)])
                                     print(bbox[signIndex][sIndex][0:4])
                                     x_min, y_min, x_max, y_max = np.array(bbox[signIndex][sIndex][0:4])
-                                    x_min = x_min * 320
-                                    y_min = y_min * 320
-                                    x_max = x_max * 320
-                                    y_max = y_max * 320
+                                    x_min = x_min
+                                    y_min = y_min
+                                    x_max = x_max
+                                    y_max = y_max
                                     color = (0, 255, 0)  # Green color (BGR format)
                                     thickness = 2
                                     cv.rectangle(rframe, (int(x_min), int(y_min)), (int(x_max), int(y_max)), color, thickness)
         
-        cv.imshow('YOLO', frame)     
+        cv.imshow('YOLO', rframe)     
         if cv.waitKey(1) & 0xFF == ord(' '):
             exit()    
     cap.release()
+
+if from_vid ==  "test_bb":
+    frame = cv.imread(input_path, 1)
+    
+    if model_use == "keras":
+        f1 = maxwidth / frame.shape[1]
+        f2 = maxheight / frame.shape[0]
+        f = min(f1, f2)
+        dim = (int(frame.shape[1] * f), int(frame.shape[0] * f))
+        rframe = cv.resize(frame, dim)
+        h, w = rframe.shape[:2]
+        if h < w:
+            top = (maxheight - h) / 2
+            bottom = (maxheight - h) / 2
+            left = 0
+            right = 0
+        else:
+            top = 0
+            bottom = 0
+            left = (maxwidth - w) / 2
+            right = (maxwidth - w) / 2
+        rframe = cv.copyMakeBorder(rframe, int(top), int(bottom), int(left), int(right), cv.BORDER_CONSTANT)
+    else:
+        rframe = cv.resize(frame, (maxheight,maxwidth))
+    #cv.imshow("test",rframe)
+    nframe = np.array(rframe)
+    nframe = np.expand_dims(nframe, 0)
+    nframe = nframe/255.0
+
+    results = model(nframe)
+    print(results)
+    #print(results['detection_boxes'])
+    keras_cv.visualization.draw_bounding_boxes(
+            nframe,
+            results[boxes],
+            bounding_box_format='xyxy',
+            class_mapping=class_mapping,
+            color=(255,0,0)
+        )
+    cv.imwrite(output_path, rframe)
+
 
 else:
     frame = cv.imread(input_path, 1)
     
     if model_use == "keras":
-        rframe = cv.resize(frame, (320,320),)
+        f1 = maxwidth / frame.shape[1]
+        f2 = maxheight / frame.shape[0]
+        f = min(f1, f2)
+        dim = (int(frame.shape[1] * f), int(frame.shape[0] * f))
+        rframe = cv.resize(frame, dim)
+        h, w = rframe.shape[:2]
+        if h < w:
+            top = (maxheight - h) / 2
+            bottom = (maxheight - h) / 2
+            left = 0
+            right = 0
+        else:
+            top = 0
+            bottom = 0
+            left = (maxwidth - w) / 2
+            right = (maxwidth - w) / 2
+        rframe = cv.copyMakeBorder(rframe, int(top), int(bottom), int(left), int(right), cv.BORDER_CONSTANT)
+        #rframe = cv.resize(frame, (320,320))
+        #rframe = tf.image.resize(frame, (320,320),preserve_aspect_ratio=True)
     else:
-        rframe = cv.resize(frame, (320,320))
+        rframe = cv.resize(frame, (maxheight,maxwidth))
+    #cv.imshow("test",rframe)
     nframe = np.array(rframe)
     nframe = np.expand_dims(nframe, 0)
     nframe = nframe/255.0
@@ -148,15 +228,15 @@ else:
                         print(class_ids[int(classes[signIndex][sIndex])])
                         print(bbox[signIndex][sIndex][0:4])
                         x_min, y_min, x_max, y_max = np.array(bbox[signIndex][sIndex][0:4])
-                        x_min = x_min * 320
-                        y_min = y_min * 320
-                        x_max = x_max * 320
-                        y_max = y_max * 320
+                        x_min = x_min
+                        y_min = y_min
+                        x_max = x_max
+                        y_max = y_max
                         color = (0, 255, 0)  # Green color (BGR format)
                         thickness = 2
                         cv.rectangle(rframe, (int(x_min), int(y_min)), (int(x_max), int(y_max)), color, thickness)
         
-        cv.imwrite(output_path, frame)
+        cv.imwrite(output_path, rframe)
         
     else:
         confidence = np.array(results[confidence_scr])
@@ -165,12 +245,12 @@ else:
         for signIndex, sign in enumerate(confidence):
             #print(sign)
             #print(classes[signIndex])
-            if sign.any() > THRESHOLD:
+            if sign.any() > THRESHOLD * 100:
                 for sIndex, s in enumerate(sign):
                     #print(sIndex, " ", s)
-                    if s.any() > THRESHOLD:
+                    if s.any() > THRESHOLD * 100:
                         for cIndex, c in enumerate(s):
-                            if c > THRESHOLD and cIndex != 0:
+                            if c > THRESHOLD * 100 and cIndex != 0:
                                 print(class_ids[int(cIndex)])
                                 print(bbox[signIndex][sIndex][0:4])
                                 x_min, y_min, x_max, y_max = np.array(bbox[signIndex][sIndex][0:4])
@@ -182,6 +262,6 @@ else:
                                 thickness = 2
                                 cv.rectangle(rframe, (int(x_min), int(y_min)), (int(x_max), int(y_max)), color, thickness)
         
-        cv.imwrite(output_path, frame)
+        cv.imwrite(output_path, rframe)
 
 cv.destroyAllWindows()

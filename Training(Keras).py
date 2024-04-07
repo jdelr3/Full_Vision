@@ -1,17 +1,18 @@
 import os
 import xml.etree.ElementTree as ET
-import tensorflow as tf
 import keras_cv
+import tensorflow as tf
 
 from tqdm.auto import tqdm
 from tensorflow import keras
 from keras_cv import visualization
 
 SPLIT_RATIO = 0.2
-BATCH_SIZE = 4
+BATCH_SIZE = 2
 LEARNING_RATE = 0.001
-EPOCH = 75
+EPOCH = 15
 GLOBAL_CLIPNORM = 10.0
+
 
 class_ids = [
     "End",
@@ -20,7 +21,7 @@ class_ids = [
 ]
 class_mapping = dict(zip(range(len(class_ids)), class_ids))
 
-GPU = True
+GPU = False
 
 if GPU:
     # Path to images and annotations
@@ -30,7 +31,7 @@ if GPU:
 else:
     path_images = r"C:\Users\johnn\Desktop\Signs\SortedII"
     path_annot = r"C:\Users\johnn\Desktop\Signs\SortedII"
-    model_path = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\model100.keras"
+    model_path = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\model640.keras"
 
 # Get all XML file paths in path_annot and sort them
 xml_files = sorted(
@@ -126,31 +127,34 @@ def load_dataset(image_path, classes, bbox):
     }
     return {"images": tf.cast(image, tf.float32), "bounding_boxes": bounding_boxes}
  
-#augmenter = keras.Sequential(
-#    layers=[
-#        keras_cv.layers.RandomFlip(mode="horizontal", bounding_box_format="xyxy"),
-#        keras_cv.layers.JitteredResize(
-#            target_size=(320, 320),
-#            scale_factor=(1.0, 1.0),
-#            bounding_box_format="xyxy",
-#        ),
-#    ]
-#)
-
-resizing_train = keras_cv.layers.JitteredResize(
-    target_size=(320, 320),
-    scale_factor=(1.0, 1.0),
-    bounding_box_format="xyxy",
+augmenter = keras.Sequential(
+    layers=[
+        #keras_cv.layers.RandomFlip(mode="horizontal", bounding_box_format="xyxy"),
+        keras_cv.layers.RandomShear(x_factor=0.1,y_factor=0.2,bounding_box_format="xyxy"),
+        keras_cv.layers.JitteredResize(
+            target_size=(640, 640),
+            scale_factor=(1.0, 1.0),
+            bounding_box_format="xyxy",
+        ),
+    ]
 )
 
+'''
+resizing_train = keras_cv.layers.JitteredResize(
+    target_size=(640,640),
+    scale_factor=(1.0, 1.0),
+    bounding_box_format="xyxy",
+
+)
+'''
 train_ds = train_data.map(load_dataset, num_parallel_calls=tf.data.AUTOTUNE)
 train_ds = train_ds.shuffle(BATCH_SIZE * 4)
 train_ds = train_ds.ragged_batch(BATCH_SIZE, drop_remainder=True)
-#train_ds = train_ds.map(augmenter, num_parallel_calls=tf.data.AUTOTUNE)
-train_ds = train_ds.map(resizing_train, num_parallel_calls=tf.data.AUTOTUNE)
+train_ds = train_ds.map(augmenter, num_parallel_calls=tf.data.AUTOTUNE)
+#train_ds = train_ds.map(resizing_train, num_parallel_calls=tf.data.AUTOTUNE)
 
 resizing_test = keras_cv.layers.JitteredResize(
-    target_size=(320, 320),
+    target_size=(640, 640),
     scale_factor=(1.0, 1.0),
     bounding_box_format="xyxy",
 )
@@ -161,7 +165,7 @@ val_ds = val_ds.ragged_batch(BATCH_SIZE, drop_remainder=True)
 #val_ds = val_ds.map(resizing, num_parallel_calls=tf.data.AUTOTUNE)
 val_ds = val_ds.map(resizing_test, num_parallel_calls=tf.data.AUTOTUNE)
 
-'''
+
 def visualize_dataset(inputs, value_range, rows, cols, bounding_box_format):
     inputs = next(iter(inputs.take(1)))
     images, bounding_boxes = inputs["images"], inputs["bounding_boxes"]
@@ -185,7 +189,7 @@ visualize_dataset(
 visualize_dataset(
     val_ds, bounding_box_format="xyxy", value_range=(0, 255), rows=2, cols=2
 )
-'''
+
 
 def dict_to_tuple(inputs):
     return inputs["images"], inputs["bounding_boxes"]
@@ -197,7 +201,7 @@ val_ds = val_ds.map(dict_to_tuple, num_parallel_calls=tf.data.AUTOTUNE)
 val_ds = val_ds.prefetch(tf.data.AUTOTUNE)
 
 backbone = keras_cv.models.YOLOV8Backbone.from_preset(
-    "yolo_v8_l_backbone_coco",
+    "yolo_v8_xs_backbone_coco",
     load_weights=True
 )
  
@@ -205,7 +209,7 @@ yolo = keras_cv.models.YOLOV8Detector(
     num_classes=len(class_mapping),
     bounding_box_format="xyxy",
     backbone=backbone,
-    fpn_depth=3,
+    fpn_depth=1,
 )
  
 yolo.summary()
@@ -269,6 +273,7 @@ history = yolo.fit(
 )
 
 tf.keras.Model.save(yolo, model_path)
+#yolo = keras.models.load_model(model_path)
 
 def visualize_detections(model, dataset, bounding_box_format):
     for i in range(10):
@@ -290,3 +295,5 @@ def visualize_detections(model, dataset, bounding_box_format):
             class_mapping=class_mapping,
         )
 visualize_detections(yolo, dataset=val_ds, bounding_box_format="xyxy")
+
+visualization.plot_bounding_box_gallery()

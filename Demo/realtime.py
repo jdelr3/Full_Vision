@@ -15,13 +15,20 @@
 ###
 ################################################################################
 
-import os            ### probably will be used for writting to sd card
+import argparse		### implementation of command line flags to control features
+import time         ### for calculating time delays
+from W2812 import SPItoWS ### LED controller
+
+import os            ### used for writting to sd card
+import datetime      ### used to get the date in YYYY-MM-DD for folder
+
+import tensorflow as tf ### load the keras model
+from tensorflow import keras ### high level cv library
 import cv2 as cv     ### opencv libraries
 import numpy as np   ### for image mainpulation "cut out roi"
+
+### Possible deletion depending on speed
 import threading     ### will be used to multihread video input
-import datetime      ### used to get the date in YYYY-MM-DD for folder
-import argparse		### implementation of command line flags to control features
-from tensorflow import keras
 
 ################################################################################
 ###
@@ -109,16 +116,42 @@ def SAVE_TO_SD (file_path, frame, writer):
    else:
       return -1
    
+def GET_BRIGHTNESS(sign):
+    divVal = max(10-bValue, 1) ### prevent divide by zero
+    sign = (sign[0], int(sign[1]/divVal), int(sign[2]/divVal), int(sign[3]/divVal))
+    return sign
 
-def SET_LED(brightness, color):
+def ERROR_LED (errorCode):
 ###############################################################################
 ###
-###   Given a brightness setting and a led color write that data to the led
+### Given an error code flash the light red that many times followed by a
+###     half second delay since error this is a trap condition
 ###
 ###############################################################################
-   pass
+    i = -errorcode ## invert error code to positive value
+    print("Encountered error: ", errorCode)
+    dimError = GET_BRIGHTNESS(errColor)
+    while True:
+        while i > 0:
+            WS.RGBto3Bytes(dimError[0], dimError[1], dimError[2], dimError[3])
+            WS.LED_show()
+            time.sleep(0.25)
+            WS.LED_OFF_ALL()
+        time.sleep(.75)   
 
+def SET_LED(sign):
+###############################################################################
+###
+###   Given an led color write that data to the led
+###     return time led turned on for timeout
+###
+###############################################################################
+    dimSign = GET_BRIGHTNESS(sign)
+    WS.RGBto3Bytes(dimSign[0], dimSign[1], dimSign[2], dimSign[3])
+    WS.LED_show()
+    return time.time_ns()
 
+'''
 def preprocess(frame):
 ###############################################################################
 ###
@@ -190,7 +223,7 @@ def getClassName(classNo):
         return 'Wild animals crossing'
     else:
         return ""
-
+        
 def PIXEL_NORMALIZATION(frame):
 ###############################################################################
 ###
@@ -233,6 +266,7 @@ def WRITE_ERROR(errorcode):
 ### 
 ###############################################################################
    pass
+'''
 
 ###############################################################################
 ###
@@ -243,9 +277,16 @@ parser = argparse.ArgumentParser(description="Gives the ability to enable and \
    disable features as necessary during the programming testing phase")
 parser.add_argument('-S',"--ShowVideo", action="store_true", 
                     help="Show video on desktop")
-parser.add_argument('-M', "--Demo", action="store_true", 
+parser.add_argument('-I', "--input", type=str,
                     help="Use a video from  the desktop")
-parser.add_argument('-D', "--Debug", action="store_true")
+parser.add_argument('-V', "--verbose", action="store_true", 
+                    help="ouput debug info")
+parser.add_argument('-M', "--model", type=str,
+                    help="model file to load")
+parser.add_argument('-T', "--treshhold", type=float,
+                    help="Changes the threshold value")
+parser.add_argument('-B', "--brightness", type=int,
+                    help="value from 1-10 brightness 10 is max")
 
 args = parser.parse_args()
 
@@ -256,20 +297,35 @@ args = parser.parse_args()
 ###############################################################################
 
 #model threshold
-threshold = 0.80
+threshold = args.threshold
 font = cv.FONT_HERSHEY_COMPLEX
+maxwidth, maxheight = 320, 320 # size for dectector
 
 #Video variables
-if args.Demo:
-   CameraSource = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\FullertonAve.mp4"
+if args.input !=None:
+   CameraSource = args.input
+   #CameraSource = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\FullertonAve.mp4"
    #CameraSource = r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\Frankfurt.mp4"
 else:
-   CameraSource = 0
+   ### load the camera using the nvidia camera loader with max input size and
+   ###  and output size of 960x616. requires less resources than loading dev/video/0 and
+   ###  resizing manually
+   CameraSource = "nvarguscamerasrc sensor_mode=0 ! video/x-raw(memory:NVMM), width=(int)3820, height=(int)2464, format=(string)NV12, framerate=(fraction)21/1 ! nvvidconv ! video/x-raw, width=(int)960, height=(int)616, format=(string)BGRx ! videoconvert ! appsink"
 
 #error codes
-errorcode = 0
+errorcode = 0 #initalize error code value, red output flashing code errors
 path_to_SD = "/media/externalSD/" ## This is an example will change once the
                                  #on the hardware and confirm directory
+
+#LED setup
+WS = SPItoWS(1)
+WS.LED_OFF_ALL() 
+schoolColor = (0, 255, 216, 0)   ### RGB color values of sign 
+pedColor = (0, 247, 181, 0)      ### RGB color values of sign
+errColor = (0, 255, 0, 0)        ### RGB value error
+
+bValue = args.brightness
+
 
 ###############################################################################
 ###
@@ -278,6 +334,8 @@ path_to_SD = "/media/externalSD/" ## This is an example will change once the
 ###############################################################################
 noSD = -1      # error code 1 no external sd mounted
 msngFrme = -2  # error code 2 missing or corrupted frame
+noThresh = -3  # error code 3 missing threshhold infomration
+noModel = -4   # error code 4 no model information 
 
 ###############################################################################
 ###
@@ -295,89 +353,93 @@ msngFrme = -2  # error code 2 missing or corrupted frame
 ###     
 ############################################################################### 
 
-if __name__ == "__main__": #this will probably never be called but jic
-    '''
-    load the model shamefully taken from https://github.com/TotallyStud/live-road-sign-detection/tree/main
-    This group trained this model on the German Traffic Sign Recognition dataset. for the final project we
-    will have developed our own model but for the demonstration this will do
-    '''
-    model = keras.models.load_model(r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\model.keras")
-
-    # grab the first frame and then just begin the detection
-    srcVideo = cv.VideoCapture(CameraSource)
-    grabbed, frame = srcVideo.read()
-
-    cols = 1280
-    rows = 720
-
-    print(cols, rows)
-    ### setup the opencv video writer
-    #saveName = GET_SAVE_FILE(path_to_SD)
-    #print(saveName)
-    #fourcc = cv.VideoWriter_fourcc(*'mp4v') 
-    #out = cv.VideoWriter(saveName + "test.mp4", fourcc, 30, (1920,1080), 0)
-   
-    while grabbed == True and errorcode == 0:
-#      frame = video_getter.frame
-#      grabbed = video_getter.grabbed
-        grabbed, frame = srcVideo.read()
-        
-        #preprocess the video
-        #img_bin = frame.resize((320,320))
-        img_bin = preprocess(frame)
-        min_area = frame.shape[0] * frame.shape[1] / (25 * 25)
-        cv.imshow("processed image", img_bin)
-        
-        #get contours
-        rects = contour_detect(img_bin, min_area)
-
-        # get center and draw bounding boxes
-        for rect in rects:
-            xc = int(rect[0] + rect[2] / 2)
-            yc = int(rect[1] + rect[3] / 2)
-            size = max(rect[2], rect[3])
-            x1 = max(0, int(xc - size / 2))
-            y1 = max(0, int(yc - size / 2))
-            x2 = min(cols, int(xc + size / 2))
-            y2 = min(rows, int(yc + size / 2))
-
-            if rect[2] > 100 and rect[3] > 100:
-                cv.rectangle(frame, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (0, 255, 0), 1)
-            crop_img = np.asarray(frame[y1:y2, x1:x2])
-            crop_img = cv.resize(crop_img, (32, 32))
-            crop_img = preprocess(crop_img)
-            crop_img = crop_img.reshape(1, 32, 32, 1)
-            predictions = model.predict(crop_img)
-            classIndex = np.argmax(predictions, axis=-1)
-            probabilityValue = np.amax(predictions)
-            if probabilityValue > threshold:
-                if getClassName(classIndex) != "":
-                    cv.putText(frame, str(classIndex) + " " + str(getClassName(classIndex)), (rect[0], rect[1] - 10),
-                            font, 0.75, (0, 0, 255), 2, cv.LINE_AA)
-                    cv.putText(frame, str(round(probabilityValue * 100, 2)) + "%", (rect[0], rect[1] - 40), font, 0.75,
-                            (0, 0, 255), 2, cv.LINE_AA)
-        
-        if args.ShowVideo:
-            cv.imshow("Output", frame)  # Display the output
-            cv.waitKey(25)
-            
-        #if SAVE_TO_SD(saveName, frame, out) != -1:
-        #   mframe = FRAME_MANIP(frame)
-        #   x1,x2,y1,y2 = SEARCH_FRAME(mframe)
-        #else:
-        #   errorcode = noSD
-
-    ### if the while loop is broken check that the frame isn't missing   
-    if grabbed == False:
-        errorcode = msngFrme
-        print("error missing frame") 
-      
-# if for some reason the prgram encounters an error and closses or a grabbed frame is missed
-# alert the user and write an error to a file on the sd card
-###############################################################################
-###
-###   Begin the clean up operations
-###
-###############################################################################
-WRITE_ERROR(errorcode)
-#video_getter.stop()
+print(args)
+#
+#if __name__ == "__main__": #this will probably never be called but jic
+##    
+##    load the model shamefully taken from https://github.com/TotallyStud/live-road-sign-detection/tree/main
+##    This group trained this model on the German Traffic Sign Recognition dataset. for the final project we
+##    will have developed our own model but for the demonstration this will do
+##    
+#    model = keras.models.load_model(r"C:\Users\johnn\Documents\Semester 14 2024 Spring\ECE 397\model.keras")
+#
+#    # grab the first frame and then just begin the detection
+#    srcVideo = cv.VideoCapture(CameraSource)
+#    grabbed, frame = srcVideo.read()
+#
+#    cols = 1280
+#    rows = 720
+#
+#    print(cols, rows)
+#    ### setup the opencv video writer
+#    #saveName = GET_SAVE_FILE(path_to_SD)
+#    #print(saveName)
+#    #fourcc = cv.VideoWriter_fourcc(*'mp4v') 
+#    #out = cv.VideoWriter(saveName + "test.mp4", fourcc, 30, (1920,1080), 0)
+#   
+#    while grabbed == True and errorcode == 0:
+##      frame = video_getter.frame
+##      grabbed = video_getter.grabbed
+#        grabbed, frame = srcVideo.read()
+#        
+#        #preprocess the video
+#        #img_bin = frame.resize((320,320))
+#        img_bin = preprocess(frame)
+#        min_area = frame.shape[0] * frame.shape[1] / (25 * 25)
+#        cv.imshow("processed image", img_bin)
+#        
+#        #get contours
+#        rects = contour_detect(img_bin, min_area)
+#
+#        # get center and draw bounding boxes
+#        for rect in rects:
+#            xc = int(rect[0] + rect[2] / 2)
+#            yc = int(rect[1] + rect[3] / 2)
+#            size = max(rect[2], rect[3])
+#            x1 = max(0, int(xc - size / 2))
+#            y1 = max(0, int(yc - size / 2))
+#            x2 = min(cols, int(xc + size / 2))
+#            y2 = min(rows, int(yc + size / 2))
+#
+#            if rect[2] > 100 and rect[3] > 100:
+#                cv.rectangle(frame, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (0, 255, 0), 1)
+#            crop_img = np.asarray(frame[y1:y2, x1:x2])
+#            crop_img = cv.resize(crop_img, (32, 32))
+#            crop_img = preprocess(crop_img)
+#            crop_img = crop_img.reshape(1, 32, 32, 1)
+#            predictions = model.predict(crop_img)
+#            classIndex = np.argmax(predictions, axis=-1)
+#            probabilityValue = np.amax(predictions)
+#            if probabilityValue > threshold:
+#                if getClassName(classIndex) != "":
+#                    cv.putText(frame, str(classIndex) + " " + str(getClassName(classIndex)), (rect[0], rect[1] - 10),
+#                            font, 0.75, (0, 0, 255), 2, cv.LINE_AA)
+#                    cv.putText(frame, str(round(probabilityValue * 100, 2)) + "%", (rect[0], rect[1] - 40), font, 0.75,
+#                            (0, 0, 255), 2, cv.LINE_AA)
+#        
+#        if args.ShowVideo:
+#            cv.imshow("Output", frame)  # Display the output
+#            cv.waitKey(25)
+#            
+#        #if SAVE_TO_SD(saveName, frame, out) != -1:
+#        #   mframe = FRAME_MANIP(frame)
+#        #   x1,x2,y1,y2 = SEARCH_FRAME(mframe)
+#        #else:
+#        #   errorcode = noSD
+#
+#    ### if the while loop is broken check that the frame isn't missing   
+#    if grabbed == False:
+#        errorcode = msngFrme
+#        print("error missing frame") 
+#      
+## if for some reason the prgram encounters an error and closses or a grabbed frame is missed
+## alert the user and write an error to a file on the sd card
+################################################################################
+####
+####   Begin the clean up operations
+####
+################################################################################
+#WRITE_ERROR(errorcode)
+##video_getter.stop()
+#
+#'''
